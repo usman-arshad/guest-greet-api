@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: guestgreet-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: guestgreet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  face-service:
+    build:
+      context: ./face-service
+      dockerfile: Dockerfile
+    container_name: guestgreet-face
+    ports:
+      - "8000:8000"
+    environment:
+      - FACE_MODEL_NAME=buffalo_l
+      - FACE_DETECTION_THRESHOLD=0.5
+    volumes:
+      - face_models:/root/.insightface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  nest-api:
+    build:
+      context: ./nest-api
+      dockerfile: Dockerfile
+    container_name: guestgreet-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_DATABASE=guestgreet
+      - FACE_SERVICE_URL=http://face-service:8000
+      - FACE_SERVICE_TIMEOUT=10000
+      - RECOGNITION_ENABLED=true
+      - RECOGNITION_THRESHOLD=0.75
+      - RECOGNITION_COOLDOWN_MINUTES=10
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      face-service:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  face_models:
+  uploads:

@@ -1,0 +1,392 @@
+{
+  "info": {
+    "name": "GuestGreet API",
+    "description": "Privacy-first face recognition welcome system for hotels",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System Health",
+      "item": [
+        {
+          "name": "Check Face Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Recognition Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/recognition/status",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer Management",
+      "item": [
+        {
+          "name": "Enroll Customer with Face",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "displayName",
+                  "value": "Alex",
+                  "type": "text"
+                },
+                {
+                  "key": "consentGiven",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "branchId",
+                  "value": "branch-001",
+                  "type": "text"
+                },
+                {
+                  "key": "profileImage",
+                  "type": "file",
+                  "src": "",
+                  "description": "Upload a JPG/PNG image with a single face"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:3000/customers/enroll",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "enroll"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/customers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/customers/{{customerId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "{{customerId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Alexander\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/customers/{{customerId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "{{customerId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Image",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "profileImage",
+                  "type": "file",
+                  "src": "",
+                  "description": "New face image"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:3000/customers/{{customerId}}/profile-image",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "{{customerId}}", "profile-image"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Consent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/customers/{{customerId}}/revoke-consent",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "{{customerId}}", "revoke-consent"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Customer",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/customers/{{customerId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["customers", "{{customerId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Face Recognition",
+      "item": [
+        {
+          "name": "Identify from Frame (Base64)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"imageBase64\": \"<YOUR_BASE64_ENCODED_IMAGE>\",\n  \"cameraId\": \"lobby-cam-01\",\n  \"branchId\": \"branch-001\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/recognition/identify-frame",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "identify-frame"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Identify from Embedding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"embedding\": [0.123, -0.456, 0.789],\n  \"cameraId\": \"lobby-cam-01\",\n  \"branchId\": \"branch-001\",\n  \"threshold\": 0.75\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/recognition/identify",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "identify"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recognition Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/recognition/logs?limit=50",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "logs"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "branchId",
+                  "value": "branch-001",
+                  "disabled": true
+                },
+                {
+                  "key": "cameraId",
+                  "value": "lobby-cam-01",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Enable Recognition",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/recognition/toggle",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "toggle"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Disable Recognition",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/recognition/toggle",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["recognition", "toggle"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Python Face Service (Direct)",
+      "item": [
+        {
+          "name": "Detect Faces",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image_base64\": \"<YOUR_BASE64_ENCODED_IMAGE>\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8000/detect-faces",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["detect-faces"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Embedding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"face_image_base64\": \"<YOUR_BASE64_ENCODED_IMAGE>\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8000/generate-embedding",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["generate-embedding"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "customerId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -10,13 +10,15 @@ A privacy-first face recognition welcome system for hotels that greets opted-in 
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Backend API | NestJS (TypeScript) |
-| Database | PostgreSQL |
-| ORM | TypeORM |
-| Face Recognition | Python FastAPI microservice |
-| Matching Method | Face embeddings + cosine similarity |
+| Component | Technology | Status |
+|-----------|------------|--------|
+| Backend API | NestJS (TypeScript) | Done |
+| Database | PostgreSQL + pgvector | Done |
+| ORM | TypeORM | Done |
+| Face Recognition | Python FastAPI + InsightFace | Done |
+| Matching Method | Face embeddings + cosine similarity | Done |
+| Live Camera Client | Python + OpenCV (USB Webcam) | Done |
+| Android LED Display | Android App (WebSocket/HTTP) | Pending |
 
 ---
 
@@ -27,41 +29,56 @@ A privacy-first face recognition welcome system for hotels that greets opted-in 
 │                         HOTEL ENVIRONMENT                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  ┌──────────┐     RTSP Stream      ┌─────────────────────────────┐  │
-│  │  CCTV    │ ──────────────────►  │  Python Face Service        │  │
-│  │  Camera  │                      │  (FastAPI)                  │  │
-│  └──────────┘                      │  - Frame sampling (500ms)   │  │
-│                                    │  - Face detection           │  │
-│                                    │  - Embedding generation     │  │
-│                                    │  - Similarity matching      │  │
-│                                    └──────────────┬──────────────┘  │
-│                                                   │                  │
-│                                                   ▼                  │
+│  ┌──────────────┐                                                    │
+│  │  USB Webcam   │   Grabs frame every 1s                            │
+│  │  (Door Camera)│ ──────────────────┐                               │
+│  └──────────────┘                    │                               │
+│                                      ▼                               │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    NestJS Backend API                         │   │
+│  │  Webcam Client (Python + OpenCV)                [DONE]       │   │
+│  │  - Captures frames from USB webcam                           │   │
+│  │  - Encodes frame → JPEG → base64                             │   │
+│  │  - Sends to NestJS API every ~1 second                       │   │
+│  │  - Shows live preview + greeting overlay                     │   │
+│  └──────────────────────────┬───────────────────────────────────┘   │
+│                              │ POST /recognition/identify-frame      │
+│                              ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  NestJS Backend API                             [DONE]       │   │
 │  │  ┌─────────────────┐    ┌─────────────────┐                  │   │
 │  │  │ Customers       │    │ Recognition     │                  │   │
 │  │  │ Module          │    │ Module          │                  │   │
 │  │  │ - Enrollment    │    │ - Match lookup  │                  │   │
 │  │  │ - Consent mgmt  │    │ - Logging       │                  │   │
 │  │  │ - Profile CRUD  │    │ - Global toggle │                  │   │
-│  │  └─────────────────┘    └─────────────────┘                  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                    │                                 │
-│                                    ▼                                 │
+│  │  └─────────────────┘    └────────┬────────┘                  │   │
+│  └──────────────────────────────────┼───────────────────────────┘   │
+│                  Calls internally   │                                │
+│                                     ▼                                │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    PostgreSQL Database                        │   │
-│  │  - customers (profile, consent flag)                         │   │
-│  │  - face_embeddings (vector data, linked to customer)         │   │
-│  │  - recognition_logs (audit trail, optional)                  │   │
+│  │  Python Face Service (FastAPI + InsightFace)    [DONE]       │   │
+│  │  - Face detection                                            │   │
+│  │  - 512-dim embedding generation                              │   │
+│  │  - Cosine similarity matching                                │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
-│                                    │                                 │
-│                                    ▼                                 │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    Display Client                             │   │
-│  │  "Welcome back, Alex! 👋"  [Profile Picture]                 │   │
+│  │  PostgreSQL + pgvector                          [DONE]       │   │
+│  │  - customers (profile, consent flag)                         │   │
+│  │  - face_embeddings (vector data, linked to customer)         │   │
+│  │  - recognition_logs (audit trail)                            │   │
 │  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│                Match result returned to client                       │
+│                              │                                       │
+│                   ┌──────────┴──────────┐                            │
+│                   ▼                     ▼                             │
+│  ┌────────────────────────┐  ┌──────────────────────────────────┐   │
+│  │  OpenCV Window  [DONE] │  │  Android LED Display  [PENDING]  │   │
+│  │  Live preview +        │  │  Wall-mounted tablet/LED at door │   │
+│  │  greeting overlay      │  │  Shows "Welcome back, Alex!"    │   │
+│  │  (dev/testing)         │  │  (production display)            │   │
+│  └────────────────────────┘  └──────────────────────────────────┘   │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -228,14 +245,16 @@ Response: {
 
 ## Recognition Flow
 
-1. **Frame Capture**: CCTV stream sampled every 500ms-1s
-2. **Face Detection**: Python service detects faces in frame
-3. **Embedding Generation**: Generate 512-dim embedding per face
-4. **Candidate Fetch**: NestJS fetches only consented customer embeddings
-5. **Similarity Match**: Cosine similarity against candidates
-6. **Threshold Check**: Only return if confidence ≥ threshold (e.g., 0.75)
-7. **Display**: Show "Welcome back, {name}!" with profile picture
-8. **Cooldown**: Don't re-greet same person within X minutes
+1. **Frame Capture**: USB webcam frame grabbed every ~1s by webcam client
+2. **Send to API**: Webcam client POSTs base64 JPEG to `POST /recognition/identify-frame`
+3. **Face Detection**: NestJS calls Python service to detect faces in frame
+4. **Embedding Generation**: Python service generates 512-dim embedding per face
+5. **Candidate Fetch**: NestJS fetches only consented customer embeddings from DB
+6. **Similarity Match**: Cosine similarity against candidates
+7. **Threshold Check**: Only return if confidence >= threshold (default 0.75)
+8. **Cooldown**: Don't re-greet same person within X minutes (default 10 min)
+9. **Display (Current)**: OpenCV window shows live preview + green greeting overlay
+10. **Display (Pending)**: Android LED display at door shows "Welcome back, {name}!"
 
 ---
 
@@ -274,31 +293,45 @@ Response: {
 
 ---
 
-## Build Order (Recommended)
+## Build Order
 
-### Phase 1: Foundation
+### Phase 1: Foundation - DONE
 1. NestJS project setup with TypeORM + PostgreSQL
 2. Database schema with pgvector extension
 3. Customer module (CRUD + consent management)
 4. Basic API structure
 
-### Phase 2: Face Service
+### Phase 2: Face Service - DONE
 5. Python FastAPI service setup
-6. Face detection integration (e.g., MTCNN, RetinaFace)
-7. Embedding generation (e.g., FaceNet, ArcFace)
-8. Similarity matching logic
+6. Face detection integration (InsightFace buffalo_l)
+7. Embedding generation (ArcFace, 512-dim)
+8. Similarity matching logic (cosine similarity)
 
-### Phase 3: Integration
-9. NestJS ↔ Python service communication
+### Phase 3: Integration - DONE
+9. NestJS ↔ Python service communication (HTTP client)
 10. Enrollment flow (image → embedding → store)
 11. Recognition flow (frame → match → response)
 
-### Phase 4: Production Ready
+### Phase 4: Production Ready - DONE
 12. Global recognition toggle
 13. Recognition logging
 14. Cooldown logic (prevent repeat greetings)
 15. Error handling and fallbacks
-16. Testing and optimization
+16. Docker Compose (dev + prod), Postman collection, Swagger docs
+
+### Phase 5: Live Camera Client - DONE
+17. USB webcam frame grabber (Python + OpenCV)
+18. Base64 encoding + API integration
+19. Live preview window with greeting overlay
+20. Status bar, error handling, graceful shutdown
+
+### Phase 6: Android LED Display - PENDING
+21. Android app that receives recognition results
+22. Full-screen greeting display ("Welcome back, {name}!")
+23. Communication method: WebSocket or HTTP polling from NestJS API
+24. Wall-mounted tablet/LED at hotel door
+25. Auto-dismiss greeting after timeout
+26. Idle screen when no recognition active
 
 ---
 
@@ -311,22 +344,66 @@ Response: {
 - `multer` - File upload handling
 - `class-validator` - DTO validation
 
-### Python
+### Python (Face Service)
 - `fastapi` - API framework
-- `opencv-python` - Image processing
-- `face_recognition` or `deepface` - Face detection/embedding
+- `insightface` - Face detection & embedding (buffalo_l model)
+- `opencv-python-headless` - Image processing
 - `numpy` - Vector operations
+- `onnxruntime` - Model inference
 - `uvicorn` - ASGI server
+
+### Python (Webcam Client)
+- `opencv-python` - Camera capture & live preview window
+- `requests` - HTTP calls to NestJS API
 
 ---
 
-## Files to Create
+## Project Structure
 
 ```
 guest-greet-api/
-├── nest-api/                    # NestJS backend
-├── face-service/                # Python FastAPI
-├── docker-compose.yml           # Local dev environment
-├── .env.example                 # Environment template
+├── nest-api/                    # NestJS backend           [DONE]
+├── face-service/                # Python FastAPI            [DONE]
+├── webcam-client/               # USB webcam grabber        [DONE]
+│   ├── webcam_grabber.py        # Live camera → API client
+│   └── requirements.txt
+├── android-display/             # Android LED display       [PENDING]
+├── docker-compose.yml           # Production environment    [DONE]
+├── docker-compose.dev.yml       # Development environment   [DONE]
+├── GuestGreet-API.postman_collection.json                   [DONE]
+├── CONTEXT.md                   # Architecture docs
+├── TESTING_GUIDE.md             # Test scenarios
 └── README.md                    # Setup instructions
 ```
+
+---
+
+## Pending: Android LED Display
+
+### Purpose
+A wall-mounted Android tablet or LED display placed at the hotel door entrance. When the webcam client recognizes a returning customer, the display shows a full-screen greeting like "Welcome back, Alex!".
+
+### Requirements
+- Receive recognition results from the backend in real-time
+- Show full-screen greeting with customer name (and optionally profile picture)
+- Auto-dismiss greeting after a configurable timeout (e.g. 5-10 seconds)
+- Show an idle/welcome screen when no recognition is active
+- Handle offline/API-down gracefully
+
+### Communication Options (To Be Decided)
+1. **WebSocket** - NestJS pushes greeting events to the Android app in real-time (preferred, lowest latency)
+2. **HTTP Polling** - Android app polls an endpoint every 1-2 seconds for new greetings
+3. **MQTT** - Lightweight messaging protocol, good for IoT/embedded displays
+4. **Firebase Cloud Messaging (FCM)** - Push notifications to Android app
+
+### Tech Stack Options (To Be Decided)
+- Native Android app (Kotlin/Java)
+- Flutter app (cross-platform)
+- Simple Android WebView app loading a web page served by NestJS
+- React Native app
+
+### Architecture Change Needed
+The webcam client currently receives recognition results directly. For the Android display, either:
+- The webcam client forwards results to the display (peer-to-peer)
+- NestJS broadcasts results via WebSocket to all connected display clients
+- Both approaches could work; WebSocket from NestJS is cleaner for multiple displays

@@ -5,10 +5,12 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Customer } from './customer.entity';
 
 @Entity('face_embeddings')
+@Index('idx_embedding_customer', ['customerId'])
 export class FaceEmbedding {
   @PrimaryGeneratedColumn('uuid')
   id: string;

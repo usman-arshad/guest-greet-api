@@ -23,6 +23,12 @@ export interface MatchResult {
   confidence: number;
 }
 
+export interface FaceWithEmbedding {
+  bbox: number[];
+  confidence: number;
+  embedding: number[];
+}
+
 interface DetectFacesResponse {
   faces: DetectedFace[];
   count: number;
@@ -30,6 +36,12 @@ interface DetectFacesResponse {
 
 interface GenerateEmbeddingResponse {
   embedding: number[];
+  model_version: string;
+}
+
+interface DetectAndEmbedResponse {
+  faces: FaceWithEmbedding[];
+  count: number;
   model_version: string;
 }
 
@@ -78,6 +90,21 @@ export class FaceServiceClient {
       this.logger.error('Embedding generation failed', error);
       throw new HttpException(
         'Face embedding service unavailable',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
+  async detectAndEmbed(imageBase64: string): Promise<FaceWithEmbedding[]> {
+    try {
+      const response = await this.post<DetectAndEmbedResponse>('/detect-and-embed', {
+        image_base64: imageBase64,
+      });
+      return response.faces || [];
+    } catch (error) {
+      this.logger.error('Detect and embed failed', error);
+      throw new HttpException(
+        'Face service unavailable',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }

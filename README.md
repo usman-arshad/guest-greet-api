@@ -11,6 +11,8 @@ A privacy-first face recognition welcome system for hotels. Greet returning cust
 ✅ **Branch Support**: Multi-location hotel chains
 ✅ **Audit Logging**: Complete recognition event history
 ✅ **High Performance**: < 1 second recognition time
+✅ **Live Webcam Client**: USB camera captures frames and sends to API in real-time
+🔲 **Android LED Display**: Wall-mounted display at door showing greetings (pending)
 
 ---
 
@@ -19,8 +21,10 @@ A privacy-first face recognition welcome system for hotels. Greet returning cust
 - **Backend**: NestJS (TypeScript)
 - **Database**: PostgreSQL with pgvector
 - **Face Recognition**: Python FastAPI + InsightFace
+- **Live Camera**: Python + OpenCV (USB Webcam)
 - **ORM**: TypeORM
 - **Containerization**: Docker & Docker Compose
+- **Display** (Pending): Android app for LED/tablet greeting display
 
 ---
 
@@ -66,6 +70,19 @@ npm run start:dev
 - **Face Service Docs**: http://localhost:8000/docs
 - **PostgreSQL**: localhost:5432 (user: postgres, pass: postgres)
 
+### 5. Run Live Webcam Client (Optional)
+
+```bash
+# Install dependencies
+cd webcam-client
+pip install -r requirements.txt
+
+# Run the webcam grabber (requires USB webcam)
+python webcam_grabber.py
+```
+
+This opens a live preview window. When a recognized customer appears on camera, a green greeting banner is shown. Press 'q' to quit.
+
 ---
 
 ## Production Deployment
@@ -110,6 +127,10 @@ guest-greet-api/
 │   │   └── config.py
 │   ├── requirements.txt
 │   └── Dockerfile
+├── webcam-client/                     # Live USB Webcam Client
+│   ├── webcam_grabber.py              # Frame capture + API + overlay
+│   └── requirements.txt
+├── android-display/                   # Android LED Display (PENDING)
 ├── docker-compose.yml                 # Production setup
 ├── docker-compose.dev.yml             # Development setup
 ├── GuestGreet-API.postman_collection.json
@@ -217,6 +238,7 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive test scenarios.
 2. 📸 Enroll customer with face photo: `POST /customers/enroll`
 3. 🎭 Test recognition: `POST /recognition/identify-frame`
 4. 📊 View logs: `GET /recognition/logs`
+5. 📹 Live test: Run `webcam_grabber.py` and stand in front of camera
 
 ---
 
@@ -233,13 +255,22 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive test scenarios.
 ### Data Flow
 
 ```
-1. Customer Photo → 2. Face Detection → 3. Embedding Generation → 4. Store in DB
-                                                                         ↓
-                                                                    (512 numbers)
-                                                                    NOT the photo!
+Enrollment:
+  Customer Photo → Face Detection → Embedding Generation → Store in DB
+                                                                ↓
+                                                           (512 numbers)
+                                                           NOT the photo!
 
-Later...
-CCTV Frame → Detect Face → Generate Embedding → Match vs Consented Customers → Greet if matched
+Live Recognition:
+  USB Webcam → webcam_grabber.py → POST /identify-frame → NestJS → Python Face Service
+       ↓                                                                    ↓
+  Live Preview                                                    Detect → Embed → Match
+       ↓                                                                    ↓
+  OpenCV Window ◄────────────── greeting result ◄──────── Return match + confidence
+       ↓
+  "Welcome back, Alex!" (overlay)
+       ↓
+  [PENDING] Android LED Display at door
 ```
 
 ### Compliance
@@ -378,7 +409,8 @@ docker-compose -f docker-compose.dev.yml up -d
 
 ## Roadmap
 
-- [ ] WebSocket support for real-time recognition
+- [ ] **Android LED Display App** - Wall-mounted tablet/LED at hotel door showing greeting (next priority)
+- [ ] WebSocket support for real-time greeting push to display clients
 - [ ] Multi-camera coordination
 - [ ] Analytics dashboard
 - [ ] Mobile SDK for enrollment

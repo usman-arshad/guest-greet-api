@@ -92,6 +92,32 @@ class FaceProcessor:
         embedding = face.embedding.tolist()
         return embedding
 
+    def detect_and_embed(self, image: np.ndarray) -> list[dict]:
+        """Detect all faces and extract embeddings in a single model.get() call.
+
+        This avoids the overhead of calling model.get() twice (once for detection,
+        once for embedding) which was the main performance bottleneck.
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Face model not initialized")
+
+        faces = self.model.get(image)
+        results = []
+
+        for face in faces:
+            if face.det_score < settings.detection_threshold:
+                continue
+            if face.embedding is None:
+                continue
+
+            results.append({
+                "bbox": face.bbox.tolist(),
+                "confidence": float(face.det_score),
+                "embedding": face.embedding.tolist(),
+            })
+
+        return results
+
     @staticmethod
     def cosine_similarity(embedding1: list[float], embedding2: list[float]) -> float:
         vec1 = np.array(embedding1)
@@ -119,20 +145,33 @@ class FaceProcessor:
         if not candidates:
             return None, 0.0
 
-        best_match_id = None
-        best_similarity = 0.0
+        # Batched numpy matching — much faster than per-candidate loop
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        query_norm = np.linalg.norm(query_vec)
+        if query_norm == 0:
+            return None, 0.0
+        query_vec = query_vec / query_norm
 
-        for candidate in candidates:
-            similarity = self.cosine_similarity(
-                query_embedding, candidate["embedding"]
-            )
+        candidate_ids = [c["customer_id"] for c in candidates]
+        candidate_matrix = np.array(
+            [c["embedding"] for c in candidates], dtype=np.float32
+        )
 
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_match_id = candidate["customer_id"]
+        # Normalize all candidate vectors at once
+        norms = np.linalg.norm(candidate_matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        candidate_matrix = candidate_matrix / norms
+
+        # Single matrix-vector multiply for all similarities
+        similarities = candidate_matrix @ query_vec
+        # Normalize from [-1, 1] to [0, 1]
+        similarities = (similarities + 1) / 2
+
+        best_idx = int(np.argmax(similarities))
+        best_similarity = float(similarities[best_idx])
 
         if best_similarity >= threshold:
-            return best_match_id, best_similarity
+            return candidate_ids[best_idx], best_similarity
 
         return None, best_similarity
 

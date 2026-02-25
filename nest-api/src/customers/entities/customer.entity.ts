@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { FaceEmbedding } from './face-embedding.entity';
 
 @Entity('customers')
+@Index('idx_customer_consent_active', ['consentGiven', 'isActive'])
+@Index('idx_customer_branch', ['branchId'])
 export class Customer {
   @PrimaryGeneratedColumn('uuid')
   id: string;

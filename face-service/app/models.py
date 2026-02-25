@@ -54,6 +54,22 @@ class MatchResponse(BaseModel):
     confidence: float = Field(..., description="Similarity score")
 
 
+class DetectAndEmbedRequest(BaseModel):
+    image_base64: str = Field(..., description="Base64 encoded image")
+
+
+class FaceWithEmbedding(BaseModel):
+    bbox: list[float] = Field(..., description="Bounding box [x1, y1, x2, y2]")
+    confidence: float = Field(..., description="Detection confidence")
+    embedding: list[float] = Field(..., description="512-dimensional face embedding")
+
+
+class DetectAndEmbedResponse(BaseModel):
+    faces: list[FaceWithEmbedding]
+    count: int
+    model_version: str
+
+
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool

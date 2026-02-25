@@ -252,6 +252,87 @@ Review all recognition events with timestamps and confidence scores.
 
 ---
 
+### Phase 6: Live Webcam Testing
+
+**Prerequisites**: Complete Phase 2 first (enroll at least one customer).
+
+**Step 17: Install Webcam Client**
+```bash
+cd webcam-client
+pip install -r requirements.txt
+```
+
+**Step 18: Run Webcam Client**
+```bash
+python webcam_grabber.py
+```
+
+Expected output:
+```
+==================================================
+  GuestGreet - Live Webcam Recognition
+==================================================
+
+[1/2] Checking API connection...
+  API Status: connected
+  Recognition enabled: true
+  Face service healthy: true
+  Threshold: 0.75
+  Cooldown: 10 minutes
+[2/2] Opening camera (index 0)...
+  Camera opened: 640x480
+--------------------------------------------------
+  Sending frames every 1.0s
+  Press 'q' to quit
+--------------------------------------------------
+```
+
+An OpenCV window opens showing the live camera feed.
+
+**Step 19: Test Recognition with Webcam**
+
+1. Stand in front of the USB webcam (use the same face you enrolled in Phase 2)
+2. Wait 1-2 seconds for the API call to complete
+3. Expected: Green banner appears on the OpenCV window with "Welcome back, {name}!"
+4. Terminal prints: `>>> Welcome back, Alex! (confidence: 87%)`
+
+**Step 20: Test Unknown Person**
+
+1. Have someone who is NOT enrolled stand in front of the camera
+2. Expected: No green banner, terminal shows no match output
+3. The status bar at the bottom still shows "API Online"
+
+**Step 21: Test Cooldown via Webcam**
+
+1. After being recognized, stay in front of the camera
+2. The greeting banner disappears after 5 seconds
+3. The system won't re-greet you for 10 minutes (cooldown)
+4. Walk away and come back — still no greeting within cooldown window
+
+**Step 22: Test Camera Disconnect**
+
+1. While the script is running, unplug the USB webcam
+2. Expected: Terminal shows "WARNING: Failed to read frame. Retrying..."
+3. Plug the webcam back in — script should recover
+
+**Step 23: Test API Offline**
+
+1. Stop the NestJS server (`Ctrl+C` in the nest-api terminal)
+2. The webcam window status bar should show red dot + "API Offline"
+3. Restart the NestJS server — status bar should return to green "API Online"
+
+**Webcam Configuration**
+
+Edit the constants at the top of `webcam_grabber.py` if needed:
+```python
+CAMERA_INDEX = 0          # Change to 1, 2 etc. for different cameras
+FRAME_INTERVAL = 1.0      # Seconds between API calls (lower = more responsive)
+CAMERA_ID = "door-cam-01" # Logical name for this camera
+BRANCH_ID = "branch-001"  # Your hotel branch
+```
+
+---
+
 ## Advanced Testing
 
 ### Multi-Face Detection
@@ -337,27 +418,34 @@ docker logs guestgreet-db-dev
 
 ## Sample Test Scenario
 
-**Hotel Lobby Use Case:**
+**Hotel Door Use Case (Full Live Flow):**
 
 1. **Day 1**: Guest checks in
-   - Front desk enrolls "Maria" with consent
+   - Front desk enrolls "Maria" with consent via `POST /customers/enroll`
    - Takes profile photo at counter
 
-2. **Day 2**: Guest returns to lobby
-   - CCTV captures frame every 1 second
-   - System detects Maria's face
-   - Display shows: "Welcome back, Maria! 👋"
-   - Logs event with confidence 0.89
+2. **Setup**: USB webcam placed at hotel door
+   - `webcam_grabber.py` running on a computer near the door
+   - OpenCV window showing live camera feed (for dev/testing)
+   - [PENDING] Android tablet mounted on wall next to door for production display
 
-3. **Guest leaves lobby, returns 5 min later**
-   - System detects face again
-   - No greeting shown (cooldown active)
+3. **Day 2**: Guest walks through the door
+   - Webcam captures frame every 1 second
+   - Frame sent to API → face detected → embedding matched
+   - OpenCV window shows green banner: "Welcome back, Maria!"
+   - Terminal prints: `>>> Welcome back, Maria! (confidence: 89%)`
+   - [PENDING] Android LED display shows full-screen greeting
+   - Event logged with confidence 0.89
+
+4. **Guest leaves, returns 5 min later**
+   - Webcam detects face again
+   - No greeting shown (cooldown active — 10 min window)
    - Event logged but `greetingShown: false`
 
-4. **Day 5**: Guest checks out and revokes consent
-   - Front desk clicks revoke
+5. **Day 5**: Guest checks out and revokes consent
+   - Front desk revokes via `POST /customers/:id/revoke-consent`
    - All face data deleted
-   - Future visits = no recognition
+   - Future visits = no recognition, webcam shows no match
 
 ---
 

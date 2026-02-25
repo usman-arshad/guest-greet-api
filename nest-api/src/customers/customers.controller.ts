@@ -48,7 +48,7 @@ export class CustomersController {
   @ApiResponse({ status: 400, description: 'Invalid input or no face detected' })
   @ApiResponse({ status: 503, description: 'Face service unavailable' })
   async enroll(
-    @Body() dto: CreateCustomerDto,
+    @Body() dto: any,
     @UploadedFile() profileImage: Express.Multer.File,
   ): Promise<EnrollmentResponseDto> {
     const customer = await this.customersService.enrollCustomer(dto, profileImage);

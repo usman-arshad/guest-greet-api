@@ -12,6 +12,9 @@ from .models import (
     DetectedFace,
     GenerateEmbeddingRequest,
     GenerateEmbeddingResponse,
+    DetectAndEmbedRequest,
+    DetectAndEmbedResponse,
+    FaceWithEmbedding,
     MatchRequest,
     MatchResponse,
     HealthResponse,
@@ -104,6 +107,34 @@ async def generate_embedding(request: GenerateEmbeddingRequest):
     except Exception as e:
         logger.error(f"Embedding generation error: {e}")
         raise HTTPException(status_code=500, detail="Embedding generation failed")
+
+
+@app.post("/detect-and-embed", response_model=DetectAndEmbedResponse)
+async def detect_and_embed(request: DetectAndEmbedRequest):
+    """Combined detect + embed in one call. Runs model.get() once instead of twice."""
+    try:
+        image = face_processor.decode_image(request.image_base64)
+        faces = face_processor.detect_and_embed(image)
+
+        return DetectAndEmbedResponse(
+            faces=[
+                FaceWithEmbedding(
+                    bbox=f["bbox"],
+                    confidence=f["confidence"],
+                    embedding=f["embedding"],
+                )
+                for f in faces
+            ],
+            count=len(faces),
+            model_version=face_processor.model_version,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Detect and embed error: {e}")
+        raise HTTPException(status_code=500, detail="Face processing failed")
 
 
 @app.post("/match", response_model=MatchResponse)

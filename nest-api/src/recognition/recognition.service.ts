@@ -94,27 +94,63 @@ export class RecognitionService {
       return { facesDetected: 0, results: [] };
     }
 
-    const faces = await this.faceServiceClient.detectFaces(imageBase64);
+    // Single call: detect faces + extract embeddings in one model.get() pass
+    const faces = await this.faceServiceClient.detectAndEmbed(imageBase64);
 
     if (faces.length === 0) {
       return { facesDetected: 0, results: [] };
     }
 
-    const results: RecognitionResultDto[] = [];
+    // Fetch candidates once for all faces (not per-face)
+    const candidates = await this.customersService.getConsentedCustomerEmbeddings(branchId);
 
-    for (const face of faces) {
-      const embeddingResult = await this.faceServiceClient.generateEmbedding(imageBase64);
+    if (candidates.length === 0) {
+      return { facesDetected: faces.length, results: [] };
+    }
 
-      const result = await this.recognizeFromEmbedding(
-        embeddingResult.embedding,
-        cameraId,
-        branchId,
+    // Process all faces concurrently
+    const matchPromises = faces.map(async (face) => {
+      const matchResult = await this.faceServiceClient.matchEmbedding(
+        face.embedding,
+        candidates,
+        this.confidenceThreshold,
       );
 
-      if (result.matched) {
-        results.push(result);
+      if (!matchResult.matched || !matchResult.customerId) {
+        await this.logRecognition(null, cameraId, branchId, matchResult.confidence, false);
+        return null;
       }
-    }
+
+      const isInCooldown = await this.isCustomerInCooldown(matchResult.customerId, cameraId);
+      if (isInCooldown) {
+        this.logger.debug(`Customer ${matchResult.customerId} in cooldown, skipping greeting`);
+        return null;
+      }
+
+      const customer = await this.customersService.findOne(matchResult.customerId);
+
+      await this.logRecognition(
+        customer.id,
+        cameraId,
+        branchId,
+        matchResult.confidence,
+        true,
+      );
+
+      return {
+        matched: true,
+        customer: {
+          id: customer.id,
+          displayName: customer.displayName,
+          profileImageUrl: customer.profileImageUrl || '',
+        },
+        confidence: matchResult.confidence,
+        greeting: `Welcome back, ${customer.displayName}!`,
+      } as RecognitionResultDto;
+    });
+
+    const settled = await Promise.all(matchPromises);
+    const results = settled.filter((r): r is RecognitionResultDto => r !== null);
 
     return {
       facesDetected: faces.length,

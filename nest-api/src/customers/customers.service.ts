@@ -39,7 +39,7 @@ export class CustomersService {
   }
 
   async enrollCustomer(
-    dto: CreateCustomerDto,
+    dto: any,
     profileImage: Express.Multer.File,
   ): Promise<Customer> {
     if (!dto.consentGiven) {
@@ -157,6 +157,7 @@ export class CustomersService {
   async getConsentedCustomerEmbeddings(branchId?: string): Promise<CandidateEmbedding[]> {
     const query = this.embeddingRepository
       .createQueryBuilder('embedding')
+      .select(['embedding.customerId', 'embedding.embedding'])
       .innerJoin('embedding.customer', 'customer')
       .where('customer.consentGiven = :consent', { consent: true })
       .andWhere('customer.isActive = :active', { active: true });

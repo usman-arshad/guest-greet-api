@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Customer } from '../../customers/entities/customer.entity';
 
 @Entity('recognition_logs')
+@Index('idx_log_cooldown', ['customerId', 'greetingShown', 'createdAt'])
+@Index('idx_log_created', ['createdAt'])
 export class RecognitionLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;

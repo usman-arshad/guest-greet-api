@@ -4,17 +4,19 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: guestgreet-db
+    restart: always
+    env_file: .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: guestgreet
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,9 +28,10 @@ services:
     container_name: guestgreet-face
     ports:
       - "8000:8000"
+    env_file: .env
     environment:
-      - FACE_MODEL_NAME=buffalo_l
-      - FACE_DETECTION_THRESHOLD=0.5
+      - FACE_MODEL_NAME=${FACE_MODEL_NAME}
+      - FACE_DETECTION_THRESHOLD=${FACE_DETECTION_THRESHOLD}
     volumes:
       - face_models:/root/.insightface
     healthcheck:
@@ -44,20 +47,14 @@ services:
       dockerfile: Dockerfile
     container_name: guestgreet-api
     ports:
-      - "3000:3000"
+      - "${PORT}:${PORT}"
+    env_file: .env
     environment:
+      # Only override values that differ inside Docker network
       - NODE_ENV=production
-      - PORT=3000
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - DB_DATABASE=guestgreet
       - FACE_SERVICE_URL=http://face-service:8000
-      - FACE_SERVICE_TIMEOUT=10000
-      - RECOGNITION_ENABLED=true
-      - RECOGNITION_THRESHOLD=0.75
-      - RECOGNITION_COOLDOWN_MINUTES=10
     volumes:
       - uploads:/app/uploads
     depends_on:

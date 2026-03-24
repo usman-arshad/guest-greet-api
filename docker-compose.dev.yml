@@ -4,17 +4,18 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: guestgreet-db-dev
+    env_file: .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: guestgreet
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,9 +27,10 @@ services:
     container_name: guestgreet-face-dev
     ports:
       - "8000:8000"
+    env_file: .env
     environment:
-      - FACE_MODEL_NAME=buffalo_l
-      - FACE_DETECTION_THRESHOLD=0.5
+      - FACE_MODEL_NAME=${FACE_MODEL_NAME}
+      - FACE_DETECTION_THRESHOLD=${FACE_DETECTION_THRESHOLD}
     volumes:
       - ./face-service/app:/app/app
       - face_models_dev:/root/.insightface

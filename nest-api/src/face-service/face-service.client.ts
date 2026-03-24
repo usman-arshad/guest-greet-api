@@ -102,7 +102,11 @@ export class FaceServiceClient {
       });
       return response.faces || [];
     } catch (error) {
-      this.logger.error('Detect and embed failed', error);
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        this.logger.error(`Face service timeout after ${this.timeout}ms - increase FACE_SERVICE_TIMEOUT`);
+      } else {
+        this.logger.error('Detect and embed failed', error);
+      }
       throw new HttpException(
         'Face service unavailable',
         HttpStatus.SERVICE_UNAVAILABLE,

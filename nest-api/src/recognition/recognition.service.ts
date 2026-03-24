@@ -185,6 +185,9 @@ export class RecognitionService {
     customerId: string,
     cameraId?: string,
   ): Promise<boolean> {
+
+    return false;
+    
     const cooldownTime = new Date();
     cooldownTime.setMinutes(cooldownTime.getMinutes() - this.cooldownMinutes);
 

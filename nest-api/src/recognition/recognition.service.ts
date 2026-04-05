@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { Repository, MoreThan, LessThan } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { RecognitionLog } from './entities/recognition-log.entity';
 import { CustomersService } from '../customers/customers.service';
@@ -10,13 +10,16 @@ import {
   RecognitionStatusDto,
   MultipleRecognitionResultDto,
 } from './dto';
+import { RecognitionGateway } from './recognition.gateway';
 
 @Injectable()
-export class RecognitionService {
+export class RecognitionService implements OnModuleInit {
   private readonly logger = new Logger(RecognitionService.name);
   private recognitionEnabled: boolean;
   private readonly confidenceThreshold: number;
   private readonly cooldownMinutes: number;
+  private readonly logRetentionDays: number;
+  private cleanupInterval: NodeJS.Timeout;
 
   constructor(
     @InjectRepository(RecognitionLog)
@@ -24,10 +27,31 @@ export class RecognitionService {
     private readonly customersService: CustomersService,
     private readonly faceServiceClient: FaceServiceClient,
     private readonly configService: ConfigService,
+    private readonly recognitionGateway: RecognitionGateway,
   ) {
     this.recognitionEnabled = this.configService.get<boolean>('recognition.enabled') ?? true;
     this.confidenceThreshold = this.configService.get<number>('recognition.confidenceThreshold') || 0.75;
-    this.cooldownMinutes = this.configService.get<number>('recognition.cooldownMinutes') || 10;
+    this.cooldownMinutes = this.configService.get<number>('recognition.cooldownMinutes') ?? 10;
+    this.logRetentionDays = this.configService.get<number>('recognition.logRetentionDays') || 30;
+  }
+
+  onModuleInit() {
+    // Run cleanup on startup, then every 24 hours
+    this.cleanupOldLogs();
+    this.cleanupInterval = setInterval(() => this.cleanupOldLogs(), 24 * 60 * 60 * 1000);
+  }
+
+  private async cleanupOldLogs(): Promise<void> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - this.logRetentionDays);
+
+    const { affected } = await this.recognitionLogRepository.delete({
+      createdAt: LessThan(cutoff),
+    });
+
+    if (affected && affected > 0) {
+      this.logger.log(`Cleaned up ${affected} recognition logs older than ${this.logRetentionDays} days`);
+    }
   }
 
   async recognizeFromEmbedding(
@@ -53,13 +77,11 @@ export class RecognitionService {
     );
 
     if (!matchResult.matched || !matchResult.customerId) {
-      await this.logRecognition(null, cameraId, branchId, matchResult.confidence, false);
       return { matched: false };
     }
 
     const isInCooldown = await this.isCustomerInCooldown(matchResult.customerId, cameraId);
     if (isInCooldown) {
-      this.logger.debug(`Customer ${matchResult.customerId} in cooldown, skipping greeting`);
       return { matched: false };
     }
 
@@ -73,7 +95,7 @@ export class RecognitionService {
       true,
     );
 
-    return {
+    const result: RecognitionResultDto = {
       matched: true,
       customer: {
         id: customer.id,
@@ -83,6 +105,11 @@ export class RecognitionService {
       confidence: matchResult.confidence,
       greeting: `Welcome back, ${customer.displayName}!`,
     };
+
+    this.logger.log(`Match: ${result.customer!.displayName} (confidence: ${result.confidence})`);
+    this.recognitionGateway.emitRecognitionResult(result);
+
+    return result;
   }
 
   async recognizeFromFrame(
@@ -117,13 +144,11 @@ export class RecognitionService {
       );
 
       if (!matchResult.matched || !matchResult.customerId) {
-        await this.logRecognition(null, cameraId, branchId, matchResult.confidence, false);
         return null;
       }
 
       const isInCooldown = await this.isCustomerInCooldown(matchResult.customerId, cameraId);
       if (isInCooldown) {
-        this.logger.debug(`Customer ${matchResult.customerId} in cooldown, skipping greeting`);
         return null;
       }
 
@@ -137,7 +162,7 @@ export class RecognitionService {
         true,
       );
 
-      return {
+      const result: RecognitionResultDto = {
         matched: true,
         customer: {
           id: customer.id,
@@ -146,7 +171,11 @@ export class RecognitionService {
         },
         confidence: matchResult.confidence,
         greeting: `Welcome back, ${customer.displayName}!`,
-      } as RecognitionResultDto;
+      };
+
+      this.recognitionGateway.emitRecognitionResult(result);
+
+      return result;
     });
 
     const settled = await Promise.all(matchPromises);
@@ -185,9 +214,10 @@ export class RecognitionService {
     customerId: string,
     cameraId?: string,
   ): Promise<boolean> {
+    if (this.cooldownMinutes === 0) {
+      return false;
+    }
 
-    return false;
-    
     const cooldownTime = new Date();
     cooldownTime.setMinutes(cooldownTime.getMinutes() - this.cooldownMinutes);
 

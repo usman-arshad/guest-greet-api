@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'path';
 import configuration from './config/configuration';
 import { CustomersModule } from './customers/customers.module';
 import { RecognitionModule } from './recognition/recognition.module';
@@ -11,6 +12,11 @@ import { FaceServiceModule } from './face-service/face-service.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
+      envFilePath: [
+        join(__dirname, '..', '..', '.env'), // root .env when running locally from nest-api/
+        join(__dirname, '..', '.env'),        // root .env when running from dist/
+        '.env',                               // fallback (Docker injects env vars directly)
+      ],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

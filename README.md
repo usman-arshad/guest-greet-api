@@ -42,21 +42,28 @@ A privacy-first face recognition welcome system for hotels. Greet returning cust
 cd guest-greet-api
 ```
 
-### 2. Start Development Environment
+### 2. Start Development Environment (Docker - Recommended)
 
 ```bash
-# Start PostgreSQL + Face Service
-docker-compose -f docker-compose.dev.yml up -d
+# Start all services (DB + Face Service + NestJS with live reload)
+docker compose -f docker-compose.dev.yml up -d
 
 # Wait for face service to download models (first time: ~2-3 min)
-docker logs -f guestgreet-face-dev
+docker logs -f guestgreet-face
 
-# When you see "Face analysis model loaded successfully", proceed
+# When you see "Face analysis model loaded successfully", the system is ready
 ```
 
-### 3. Start NestJS API
+# if you changes in .env so you need to recreate that container
+docker compose -f docker-compose.dev.yml up -d --force-recreate nest-api
+
+### 3. Or Run NestJS Locally (DB + Face Service still in Docker)
 
 ```bash
+# Start only DB + Face Service in Docker
+docker compose -f docker-compose.dev.yml up -d postgres face-service
+
+# Run NestJS locally
 cd nest-api
 npm install
 npm run start:dev
@@ -114,6 +121,7 @@ guest-greet-api/
 │   │   ├── recognition/               # Face recognition & matching
 │   │   │   ├── recognition.controller.ts
 │   │   │   ├── recognition.service.ts
+│   │   │   ├── recognition.gateway.ts  # WebSocket — emits match events
 │   │   │   ├── dto/
 │   │   │   └── entities/
 │   │   ├── face-service/              # Python service HTTP client
@@ -180,28 +188,33 @@ guest-greet-api/
 
 ### Environment Variables
 
-Create `nest-api/.env`:
+All config lives in a single root `.env` file (used by both Docker and local runs):
 
 ```env
 # Server
 PORT=3000
 NODE_ENV=development
+CORS_ORIGIN=*
 
 # Database
+# Local defaults — Docker overrides DB_HOST and DB_PORT via docker-compose environment
 DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_DATABASE=guestgreet
+DB_PORT=5433
+DB_USERNAME=admin
+DB_PASSWORD=secret
+DB_DATABASE=guest_greet_db
 
 # Face Service
+# Local default — Docker overrides FACE_SERVICE_URL via docker-compose environment
 FACE_SERVICE_URL=http://localhost:8000
-FACE_SERVICE_TIMEOUT=5000
+FACE_SERVICE_TIMEOUT=30000
+FACE_MODEL_NAME=buffalo_l
+FACE_DETECTION_THRESHOLD=0.5
 
 # Recognition Settings
 RECOGNITION_ENABLED=true
 RECOGNITION_THRESHOLD=0.75
-RECOGNITION_COOLDOWN_MINUTES=10
+RECOGNITION_COOLDOWN_MINUTES=1
 
 # Storage
 PROFILE_IMAGES_PATH=./uploads/profiles
@@ -263,14 +276,14 @@ Enrollment:
 
 Live Recognition:
   USB Webcam → webcam_grabber.py → POST /identify-frame → NestJS → Python Face Service
-       ↓                                                                    ↓
-  Live Preview                                                    Detect → Embed → Match
-       ↓                                                                    ↓
-  OpenCV Window ◄────────────── greeting result ◄──────── Return match + confidence
-       ↓
-  "Welcome back, Alex!" (overlay)
-       ↓
-  [PENDING] Android LED Display at door
+       ↓                                                     ↓              ↓
+  Live Preview                                          WebSocket   Detect → Embed → Match
+       ↓                                                     ↓              ↓
+  OpenCV Window ◄────────────── HTTP result ◄──────── Return match + confidence
+                                                             ↓
+                                                    recognition:match event
+                                                             ↓
+                                                    Android LED Display at door
 ```
 
 ### Compliance
@@ -398,19 +411,36 @@ npm run migration:generate -- -n MigrationName
 npm run migration:run
 ```
 
-### Rebuild Containers
+### Docker Commands
 
 ```bash
-docker-compose -f docker-compose.dev.yml build --no-cache
-docker-compose -f docker-compose.dev.yml up -d
+# Start everything (dev with live reload)
+docker compose -f docker-compose.dev.yml up -d
+
+# After changing .env — must force-recreate to reload env vars
+docker compose -f docker-compose.dev.yml up -d --force-recreate nest-api
+
+# After adding/removing npm packages — must rebuild image
+docker compose -f docker-compose.dev.yml up -d --build nest-api
+
+# Full rebuild (no cache)
+docker compose -f docker-compose.dev.yml build --no-cache
+docker compose -f docker-compose.dev.yml up -d
+
+# Stop everything
+docker compose -f docker-compose.dev.yml down
 ```
+
+**What auto-reloads without any command:**
+- Any file change in `nest-api/src/` (watch mode restarts NestJS automatically)
+- Any file change in `face-service/app/` (uvicorn --reload restarts Python automatically)
 
 ---
 
 ## Roadmap
 
 - [ ] **Android LED Display App** - Wall-mounted tablet/LED at hotel door showing greeting (next priority)
-- [ ] WebSocket support for real-time greeting push to display clients
+- [x] WebSocket support for real-time greeting push to display clients (`ws://host:3000/recognition` — event: `recognition:match`)
 - [ ] Multi-camera coordination
 - [ ] Analytics dashboard
 - [ ] Mobile SDK for enrollment

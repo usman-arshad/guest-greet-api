@@ -14,7 +14,10 @@ export default () => ({
   recognition: {
     enabled: process.env.RECOGNITION_ENABLED !== 'false',
     confidenceThreshold: parseFloat(process.env.RECOGNITION_THRESHOLD || '0.75'),
-    cooldownMinutes: parseInt(process.env.RECOGNITION_COOLDOWN_MINUTES || '10', 10),
+    cooldownMinutes: process.env.RECOGNITION_COOLDOWN_MINUTES != null
+      ? parseInt(process.env.RECOGNITION_COOLDOWN_MINUTES, 10)
+      : 10,
+    logRetentionDays: parseInt(process.env.RECOGNITION_LOG_RETENTION_DAYS || '30', 10),
   },
   storage: {
     profileImagesPath: process.env.PROFILE_IMAGES_PATH || './uploads/profiles',
